@@ -12,13 +12,13 @@ export function CraftedSection() {
     <section className="section-pad" aria-labelledby="crafted-heading">
       <Container>
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
-          {/* Image side */}
+          {/* Image side — shown second on mobile, first on desktop */}
           <motion.div
             initial={reduceMotion ? {} : { opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.7 }}
-            className="relative"
+            className="relative order-2 lg:order-1"
           >
             <div className="relative aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl">
               <Image
@@ -36,12 +36,13 @@ export function CraftedSection() {
             </div>
           </motion.div>
 
-          {/* Text side */}
+          {/* Text side — shown first on mobile, second on desktop */}
           <motion.div
             initial={reduceMotion ? {} : { opacity: 0, x: 30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.7, delay: 0.15 }}
+            className="order-1 lg:order-2"
           >
             <p className="label-small text-wine mb-4">Our Story</p>
             <h2 id="crafted-heading" className="heading-lg mb-6">

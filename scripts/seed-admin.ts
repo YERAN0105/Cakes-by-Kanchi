@@ -28,7 +28,8 @@ if (!adminEmail || !adminPassword) {
 
 const supabase = createClient(supabaseUrl, serviceRoleKey, {
   auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  realtime: { transport: ws as any },
 });
 
 async function seedAdmin() {

@@ -6,6 +6,7 @@ import { CraftedSection } from "@/components/storefront/home/CraftedSection";
 import { HowItWorks } from "@/components/storefront/home/HowItWorks";
 import { Testimonials } from "@/components/storefront/home/Testimonials";
 import { NewsletterBand } from "@/components/storefront/home/NewsletterBand";
+import { getAllCategories } from "@/lib/products";
 import { brand } from "@/lib/brand";
 
 export const metadata: Metadata = {
@@ -13,11 +14,13 @@ export const metadata: Metadata = {
   description: `${brand.tagline}. Premium handcrafted cakes and pastries delivered across Colombo, Sri Lanka.`,
 };
 
-export default function HomePage() {
+export default async function HomePage() {
+  const categories = await getAllCategories();
+
   return (
     <>
-<HeroSection />
-      <CategoryShowcase />
+      <HeroSection />
+      <CategoryShowcase categories={categories} />
       <FeaturedCakes />
       <CraftedSection />
       <HowItWorks />

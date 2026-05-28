@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────
+   Brand Color Palette — Soft Pastel Premium Boutique
+   ───────────────────────────────────────────── */
+:root {
+  /* Brand hues */
+  --color-cream: 40 33% 96%;        /* #F8F4EF — warm off-white background */
+  --color-cream-50: 40 30% 98%;     /* #FDFAF7 — card surfaces */
+  --color-blush: 345 40% 88%;       /* #EACBD1 — soft pink */
+  --color-blush-light: 345 35% 93%; /* #F3E2E6 — lighter blush */
+  --color-blush-dark: 345 35% 78%;  /* #D6A9B4 — deeper blush */
+  --color-rose: 350 45% 72%;        /* #D48B99 — rose accent */
+  --color-rose-light: 350 40% 85%;  /* #E8BEC5 — light rose */
+  --color-wine: 345 50% 35%;        /* #852040 — deep wine — primary CTA */
+  --color-wine-light: 345 45% 45%;  /* #A3304F — hover wine */
+  --color-champagne: 38 45% 82%;    /* #E8D5B0 — warm gold accent */
+  --color-ink: 220 20% 18%;         /* #252B38 — near-black for text */
+  --color-ink-light: 220 15% 40%;   /* #59617A — muted text */
+
+  /* shadcn/ui semantic tokens — mapped to brand palette */
+  --background: 40 33% 96%;
+  --foreground: 220 20% 18%;
+
+  --card: 40 30% 98%;
+  --card-foreground: 220 20% 18%;
+
+  --popover: 40 30% 98%;
+  --popover-foreground: 220 20% 18%;
+
+  --primary: 345 50% 35%;           /* wine */
+  --primary-foreground: 40 33% 96%;
+
+  --secondary: 345 35% 93%;         /* blush-light */
+  --secondary-foreground: 345 50% 35%;
+
+  --muted: 40 20% 92%;
+  --muted-foreground: 220 15% 40%;
+
+  --accent: 38 45% 82%;             /* champagne */
+  --accent-foreground: 220 20% 18%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 40 33% 96%;
+
+  --border: 40 20% 88%;
+  --input: 40 20% 88%;
+  --ring: 345 50% 35%;
+
+  --radius: 0.625rem;
+}
+
+/* ─────────────────────────────────────────────
+   Base styles
+   ───────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    background-color: hsl(var(--background));
+  }
+
+  /* Headings default to display serif */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+
+  /* Focus rings — brand styled */
+  :focus-visible {
+    @apply outline-none ring-2 ring-wine ring-offset-2;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--color-cream));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--color-blush-dark));
+    border-radius: 3px;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Component layer
+   ───────────────────────────────────────────── */
+@layer components {
+  /* Typography utility classes */
+  .heading-display {
+    @apply font-display text-ink leading-tight tracking-tight;
+  }
+
+  .heading-xl {
+    @apply font-display text-4xl sm:text-5xl lg:text-6xl leading-tight tracking-tight text-ink;
+  }
+
+  .heading-lg {
+    @apply font-display text-3xl sm:text-4xl leading-tight tracking-tight text-ink;
+  }
+
+  .heading-md {
+    @apply font-display text-2xl sm:text-3xl leading-snug text-ink;
+  }
+
+  .heading-sm {
+    @apply font-display text-xl sm:text-2xl leading-snug text-ink;
+  }
+
+  .body-lg {
+    @apply font-body text-lg leading-relaxed text-ink-light;
+  }
+
+  .body-base {
+    @apply font-body text-base leading-relaxed text-ink-light;
+  }
+
+  .caption {
+    @apply font-body text-sm leading-normal text-ink-light;
+  }
+
+  .label-small {
+    @apply font-body text-xs uppercase tracking-widest text-ink-light;
+  }
+
+  /* Thin gold divider line */
+  .ornament-line {
+    @apply h-px bg-champagne w-24 mx-auto;
+  }
+
+  /* Brand button base */
+  .btn-primary {
+    @apply bg-wine text-cream hover:bg-wine-light transition-colors duration-200 font-body font-medium px-6 py-3 rounded-md;
+  }
+
+  .btn-secondary {
+    @apply border border-wine text-wine hover:bg-blush-light transition-colors duration-200 font-body font-medium px-6 py-3 rounded-md;
+  }
+
+  /* Shimmer skeleton */
+  .skeleton {
+    @apply bg-gradient-to-r from-blush/30 via-blush-light to-blush/30 bg-[length:200%_100%] animate-shimmer rounded;
+  }
+
+  /* Card base */
+  .card-base {
+    @apply bg-card rounded-lg border border-border shadow-sm;
+  }
+
+  /* Section padding */
+  .section-pad {
+    @apply py-16 sm:py-20 lg:py-24;
+  }
+}
+
+/* ─────────────────────────────────────────────
+   Reduced motion
+   ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

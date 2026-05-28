@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { Container } from "@/components/shared/Container";
+import { CartPageClient } from "@/components/storefront/cart/CartPageClient";
 
-export const metadata: Metadata = { title: "Cart" };
+export const metadata: Metadata = { title: "Your Cart" };
 
 export default function CartPage() {
-  return (
-    <Container className="py-24 text-center">
-      <p className="font-display text-2xl text-ink mb-2">Your cart is empty</p>
-      <p className="body-base">Cart functionality coming in Phase 3.</p>
-    </Container>
-  );
+  return <CartPageClient />;
 }

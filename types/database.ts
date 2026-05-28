@@ -853,3 +853,35 @@ export interface ProductListItem {
   product_images: { url: string; is_primary: boolean; alt_text: string | null }[];
   product_sizes: { price: string }[];
 }
+
+/** Applied coupon with computed discount — shared between cart store and server actions */
+export interface AppliedCoupon {
+  id: string;
+  code: string;
+  type: "percent" | "flat" | "free_delivery";
+  value: number;
+  discountAmount: number;
+}
+
+/** Address snapshot stored on an order at placement time */
+export interface AddressSnapshot {
+  recipient: string;
+  phone: string;
+  line1: string;
+  line2?: string | null;
+  city: string;
+  postal_code?: string | null;
+  label?: string;
+}
+
+/** Product snapshot stored on order_items at placement time */
+export interface ProductSnapshot {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl: string | null;
+  sizeName: string;
+  sizePrice: number;
+  flavorName: string | null;
+  tierName: string | null;
+}

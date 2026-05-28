@@ -68,13 +68,17 @@ React Hook Form + Zod. Never add `.default()` to Zod fields — it creates a typ
 
 ### Client state
 
-- `stores/wishlist.ts` — Zustand with `persist` middleware (localStorage key `cakery-wishlist`). Local-only until Phase 4 wires it to the DB.
-- Cart store: Phase 3.
+- `stores/wishlist.ts` — Zustand with `persist` middleware (localStorage key `cakery-wishlist`). Page at `app/(storefront)/account/wishlist/page.tsx` fetches full product details from Supabase using the stored IDs. Local-only until Phase 4 wires it to the DB (merge on login).
+- `stores/cart.ts` — Zustand with `persist` middleware (localStorage key `cakery-cart`). Holds `items`, `appliedCoupon`, `isDrawerOpen`, `_hasHydrated`. `_hasHydrated` must be checked before rendering cart UI to avoid hydration mismatches. `validateAndPriceItem()` in `lib/actions/cart.ts` re-prices items server-side on every add. Cart price is re-validated again in `createOrder` — never trust client totals.
 
 ### Key API routes
 
 - `app/api/products/route.ts` — paginated product listing with all filter params
 - `app/api/search/route.ts` — autocomplete, returns top 6 matches (id, slug, name, category, minPrice, imageUrl)
+- `app/api/slots/capacity/route.ts` — `GET ?date=YYYY-MM-DD`, returns `{ usage: { [slotId]: count } }` (counts active orders per slot)
+- `app/api/orders/track/route.ts` — guest order lookup by order_number + email/phone
+- `app/api/orders/upload-receipt/route.ts` — inserts `bank_transfer_receipts` row with storage path (not a public URL)
+- `app/api/payments/payhere/webhook/route.ts` — verifies MD5 signature, maps PayHere status codes to order status
 
 ### searchParams in Next.js 15
 
@@ -90,11 +94,34 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
 
 The `components/ui/` directory was initially empty — components are built manually from `@radix-ui/*` primitives as needed. `components/ui/accordion.tsx` is the reference implementation.
 
+### Category catalog pattern
+
+`app/(storefront)/cakes/category/[slug]/page.tsx` passes `defaultCategory={slug}` to `CatalogGrid` and `hideCategories` to `FilterSidebar`. `CatalogGrid.buildApiUrl` always appends the `defaultCategory` to every client-side API call because the route segment is never present in `useSearchParams()`. The `hideCategories` prop removes the category filter panel on category pages to prevent heading/filter conflicts.
+
+The storefront layout (`app/(storefront)/layout.tsx`) is `async` and fetches categories once via `getAllCategories()`, passing them down to `Header` as props. Do not fetch categories again inside individual pages.
+
 ### Phased build
 
-The project is built in 6 phases (see `MASTER_SPEC.md` §10). Phases 1 and 2 are complete. Stub pages exist for `/cart`, `/checkout`, `/account`, `/custom-cake` to keep the build green. Add features only within the phase currently being built.
+The project is built in 6 phases (see `MASTER_SPEC.md` §10). Phases 1–3 are complete. Add features only within the phase currently being built.
 
-Current boundary: Phase 3 (Cart, Checkout & Orders) is next. The "Add to Cart" button in `components/storefront/pdp/CustomizationEngine.tsx` shows a toast placeholder — wire it to the Zustand cart store in Phase 3.
+Current boundary: **Phase 4 (Customer Account)** — order history, saved addresses, wishlist DB sync, loyalty points, reviews, profile. Key starting points:
+- `addresses` table is already populated by Phase 3 checkout — do NOT redesign this data model. Read/write the same table from `/account/addresses`.
+- Wishlist store (`stores/wishlist.ts`) is local-only — Phase 4 should merge it with the DB on login.
+- Loyalty points are reserved in `createOrder` but never redeemed yet — Phase 4 adds the redemption UI.
+- The stub at `app/(storefront)/account/page.tsx` needs to be replaced (currently just a placeholder).
+
+### Business model
+
+Made-to-order bakery — no physical cake inventory is held. `stock_tracked = false` for all cake products. Order capacity is controlled by **time slot limits** (`max_orders` on `time_slots`), not stock levels. Stock decrement in `createOrder` only applies to physical add-ons (candles, etc.). Customers must order at least **2 days in advance** — enforced both client-side (DayPicker `disabled`) and server-side (`createOrder` validates date string).
+
+### Checkout / order creation notes
+
+- Order number format: `CKR-YYYYMMDD-XXXXXX`
+- Payment methods: `payhere` (card/bank), `bank_transfer` (manual receipt upload), `cod`
+- `free_delivery` coupon type zeros the delivery fee — handled in both `createOrder` (server) and `CheckoutClient` (client display)
+- Phone numbers: stored as `+94XXXXXXXXX`. The checkout UI shows a `+94` prefix badge; user types 9 digits. Strip/prepend on read/write.
+- Bank receipts: uploaded to the private `receipts` Supabase Storage bucket. Path (not URL) stored in `bank_transfer_receipts.image_url`. Admin generates signed URLs in Phase 5.
+- `lib/payments/payhere.ts` gracefully no-ops when `PAYHERE_MERCHANT_ID` / `PAYHERE_MERCHANT_SECRET` are empty.
 
 ## Environment variables
 

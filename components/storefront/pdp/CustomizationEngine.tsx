@@ -4,11 +4,16 @@ import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { HelpCircle, Minus, Plus, Check, Info } from "lucide-react";
+import { HelpCircle, Minus, Plus, Check, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/brand";
 import { customizationSchema, type CustomizationValues } from "@/lib/validations/customization";
+import { buildCustomizationSummary } from "@/lib/cart-utils";
+import { validateAndPriceItem } from "@/lib/actions/cart";
+import { useCartStore } from "@/stores/cart";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type { ProductWithDetails } from "@/types/database";
 
@@ -80,11 +85,70 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
 
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const messageLen = (values.message ?? "").length;
   const instructionsLen = (values.special_instructions ?? "").length;
 
-  const onSubmit = () => {
-    toast.info("Cart coming in Phase 3 — your selections have been noted!", { duration: 3000 });
+  const addItem = useCartStore((s) => s.addItem);
+  const openDrawer = useCartStore((s) => s.openDrawer);
+  const router = useRouter();
+
+  const onSubmit = async (data: CustomizationValues) => {
+    setIsSubmitting(true);
+    try {
+      let photo_url: string | undefined;
+
+      if (photoFile && product.allows_photo_upload) {
+        const supabase = createClient();
+        const ext = photoFile.name.split(".").pop() ?? "jpg";
+        const path = `photo-cakes/${product.id}/${Date.now()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("product-images")
+          .upload(path, photoFile, { upsert: false });
+        if (uploadError) {
+          toast.error("Photo upload failed — please try again");
+          return;
+        }
+        const { data: urlData } = supabase.storage.from("product-images").getPublicUrl(path);
+        photo_url = urlData.publicUrl;
+      }
+
+      const customizationWithPhoto: CustomizationValues = { ...data, photo_url };
+
+      const result = await validateAndPriceItem(product.id, customizationWithPhoto);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+
+      const { unitPrice } = result;
+      const lineTotal = unitPrice * data.quantity;
+      const primaryImage =
+        product.product_images.find((i) => i.is_primary)?.url ??
+        product.product_images[0]?.url ??
+        null;
+
+      addItem({
+        productId: product.id,
+        snapshot: {
+          id: product.id,
+          name: product.name,
+          slug: product.slug,
+          imageUrl: primaryImage,
+        },
+        customization: customizationWithPhoto,
+        customizationSummary: buildCustomizationSummary(product, customizationWithPhoto),
+        unitPrice,
+        lineTotal,
+      });
+
+      toast.success(`${product.name} added to cart`, {
+        action: { label: "View Cart", onClick: () => router.push("/cart") },
+      });
+      openDrawer();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -382,21 +446,21 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
                 </div>
                 <p className="text-sm font-body text-ink-light text-center">
                   Click to upload a photo<br />
-                  <span className="text-xs">JPG or PNG, max 5 MB</span>
+                  <span className="text-xs">JPG, PNG or WebP, max 10 MB</span>
                 </p>
               </>
             )}
             <input
               id="photo-upload"
               type="file"
-              accept="image/jpeg,image/png"
+              accept="image/jpeg,image/png,image/webp"
               className="sr-only"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file && file.size <= 5 * 1024 * 1024) {
+                if (file && file.size <= 10 * 1024 * 1024) {
                   setPhotoFile(file);
                 } else if (file) {
-                  toast.error("Photo must be under 5 MB");
+                  toast.error("Photo must be under 10 MB");
                 }
               }}
             />
@@ -578,15 +642,27 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
       <div className="space-y-3">
         <button
           type="submit"
-          className="btn-primary w-full text-center text-base py-3.5"
+          disabled={isSubmitting}
+          className="btn-primary w-full text-center text-base py-3.5 flex items-center justify-center gap-2 disabled:opacity-70"
           aria-label={`Add to cart — ${formatCurrency(totalPrice)}`}
         >
-          Add to Cart — {formatCurrency(totalPrice)}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              Adding…
+            </>
+          ) : (
+            `Add to Cart — ${formatCurrency(totalPrice)}`
+          )}
         </button>
         <button
           type="button"
-          onClick={() => toast.info("Checkout coming in Phase 3")}
-          className="btn-secondary w-full text-center text-base py-3"
+          disabled={isSubmitting}
+          onClick={handleSubmit(async (data) => {
+            await onSubmit(data);
+            router.push("/checkout");
+          })}
+          className="btn-secondary w-full text-center text-base py-3 disabled:opacity-70"
         >
           Buy Now
         </button>

@@ -14,6 +14,8 @@ export const brand = {
     country: "Sri Lanka",
   },
   mapUrl: "https://maps.google.com/?q=Colombo+Sri+Lanka",
+  mapEmbedUrl:
+    "https://www.openstreetmap.org/export/embed.html?bbox=79.848%2C6.889%2C79.868%2C6.914&layer=mapnik&marker=6.9014%2C79.8565",
   socials: {
     instagram: "https://instagram.com/cakery.lk",
     facebook: "https://facebook.com/cakery.lk",

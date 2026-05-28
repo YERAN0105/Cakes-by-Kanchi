@@ -9,6 +9,7 @@ import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Container } from "@/components/shared/Container";
 import { SearchModal } from "@/components/storefront/SearchModal";
 import { useWishlistStore } from "@/stores/wishlist";
+import { useCartStore } from "@/stores/cart";
 import { cn } from "@/lib/utils";
 import type { CategoryRow } from "@/types/database";
 
@@ -31,6 +32,18 @@ export function Header({ categories }: HeaderProps) {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const wishlistCount = useWishlistStore((s) => s.count);
+  const cartCount = useCartStore((s) => s.count);
+  const openCartDrawer = useCartStore((s) => s.openDrawer);
+  const cartHydrated = useCartStore((s) => s._hasHydrated);
+
+  const [cartBump, setCartBump] = useState(false);
+  const prevCartCount = useRef(cartCount);
+  useEffect(() => {
+    if (cartHydrated && cartCount > prevCartCount.current) {
+      setCartBump(true);
+    }
+    prevCartCount.current = cartCount;
+  }, [cartCount, cartHydrated]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10);
@@ -170,13 +183,26 @@ export function Header({ categories }: HeaderProps) {
               <User className="w-5 h-5" aria-hidden="true" />
             </Link>
 
-            <Link
-              href="/cart"
-              aria-label="Cart (0 items)"
+            <button
+              type="button"
+              onClick={openCartDrawer}
+              aria-label={`Cart (${cartHydrated ? cartCount : 0} items)`}
               className="relative p-2 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors duration-200"
             >
-              <ShoppingBag className="w-5 h-5" aria-hidden="true" />
-            </Link>
+              <motion.span
+                className="inline-flex"
+                animate={cartBump ? { scale: [1, 1.35, 0.85, 1.1, 1] } : {}}
+                transition={{ duration: 0.4 }}
+                onAnimationComplete={() => setCartBump(false)}
+              >
+                <ShoppingBag className="w-5 h-5" aria-hidden="true" />
+              </motion.span>
+              {cartHydrated && cartCount > 0 && (
+                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-wine text-cream text-[10px] font-medium flex items-center justify-center leading-none">
+                  {cartCount > 9 ? "9+" : cartCount}
+                </span>
+              )}
+            </button>
 
             <button
               type="button"

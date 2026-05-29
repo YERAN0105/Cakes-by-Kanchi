@@ -39,6 +39,7 @@ Go to your **Supabase project → SQL Editor** and run the following files **in 
 1. `supabase/migrations/001_initial_schema.sql` — all tables, types, indexes, and triggers
 2. `supabase/migrations/002_rls_policies.sql` — Row Level Security policies
 3. `supabase/seed.sql` — categories, delivery zones, time slots, add-ons, and default settings
+4. `supabase/seed-products.sql` — 22 products with sizes, flavours, images, and add-ons
 
 **Tip:** In the SQL Editor, paste the entire file content and click **Run**.
 
@@ -77,7 +78,7 @@ After running migrations, create these storage buckets in **Supabase Dashboard �
 |---|---|---|
 | `product-images` | ✅ Public | Product photos |
 | `custom-cake-refs` | 🔒 Private | Custom cake reference images |
-| `payment-receipts` | 🔒 Private | Bank transfer receipt uploads |
+| `receipts` | 🔒 Private | Bank transfer receipt uploads |
 | `review-images` | ✅ Public | Customer review photos |
 
 ---
@@ -128,9 +129,9 @@ scripts/
 | Phase | Description | Status |
 |---|---|---|
 | 1 | Foundation, Auth, DB Schema, Brand System | ✅ Done |
-| 2 | Product System, Catalog, Search | 🔜 Next |
-| 3 | Cart, Checkout, Payments, Orders | ⏳ |
-| 4 | Customer Account, Loyalty, Wishlist | ⏳ |
+| 2 | Product System, Catalog, Search | ✅ Done |
+| 3 | Cart, Checkout, Payments, Orders | ✅ Done |
+| 4 | Customer Account, Loyalty, Wishlist | 🔜 Next |
 | 5 | Admin Panel | ⏳ |
 | 6 | Notifications, Polish, Launch | ⏳ |
 

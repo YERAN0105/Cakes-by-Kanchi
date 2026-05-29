@@ -114,14 +114,25 @@ Add-on quantities are stored as `addon_quantities: Record<string, number>` on `C
 
 ### Phased build
 
-The project is built in 6 phases (see `MASTER_SPEC.md` §10). Phases 1–4 are complete. Add features only within the phase currently being built.
+The project is built in 6 phases (spec in `docs/PHASE_*.md`). Phases 1–5 are complete. Add features only within the phase currently being built.
 
-Current boundary: **Phase 5 (Admin Panel)** — order management, product/category CRUD, coupon management, delivery zone settings, time slot management, user management.
+Current boundary: **Phase 6 (Notifications, Polish & Launch)** — wire email (Resend) and WhatsApp (Meta Cloud API) notifications, complete the custom inquiry payment-link flow, polish, and deploy. See `docs/PHASE_6.md` for the full task list.
 
-Key Phase 5 wiring points:
-- `earnLoyaltyPointsAction(orderId)` in `lib/actions/account.ts` is fully written but never called — Phase 5 should call it when an admin marks an order as `delivered`.
-- Bank transfer receipts are stored as paths (not public URLs) in `bank_transfer_receipts.image_url` — Phase 5 admin must generate signed URLs via `admin.storage.from("receipts").createSignedUrl(path, 3600)` to display them.
-- `time_slots` table supports full CRUD — add, edit label/capacity, deactivate. Capacity is enforced live via `app/api/slots/capacity/route.ts` which counts non-cancelled orders per slot per date.
+### Admin panel
+
+All admin server actions live in `lib/actions/admin.ts`. Every action starts with `await requireAdmin()` which checks `role = 'admin'` from the users table and redirects otherwise. Never skip this call. Every write action also calls `logActivity()` to insert a row into `activity_logs`.
+
+The admin layout (`app/admin/layout.tsx`) wraps sidebar and topbar in `print:hidden` divs so print pages show only content. Print pages at `app/admin/orders/[orderNumber]/print/*/page.tsx` must return a `<div>` — never `<html><body>` — because they render inside the admin layout which already owns the document shell. The `PrintButton` client component at `app/admin/orders/[orderNumber]/print/PrintButton.tsx` is the only client-side piece needed for `window.print()`.
+
+The admin sidebar (`components/admin/AdminSidebar.tsx`) uses `h-screen sticky top-0` so it stays fixed while the main content scrolls.
+
+Global admin search: `components/admin/AdminSearchModal.tsx` — triggered by Cmd/Ctrl+K, queries products/orders/customers with 250 ms debounce.
+
+`next.config.ts` allows two Supabase Storage URL patterns: `/storage/v1/object/public/**` (public buckets) and `/storage/v1/object/sign/**` (signed URLs for the private `receipts` bucket). Both are needed — don't remove either.
+
+Admin form utilities `.input`, `.label`, `.error` are defined in `app/globals.css` as `@apply` utilities. Use them in all admin forms.
+
+The Orders admin page (`app/admin/orders/`) has two views managed by `OrdersPageClient.tsx`: **Baking Schedule** (default, active orders grouped by delivery date with urgency colours) and **All Orders** (full paginated table). The schedule view queries only `pending_confirmation`, `confirmed`, `in_preparation` statuses, sorted by `delivery_date` ascending.
 
 ### Business model
 
@@ -136,7 +147,7 @@ Made-to-order bakery — no physical cake inventory is held. `stock_tracked = fa
 - Payment methods: `payhere` (card/bank), `bank_transfer` (manual receipt upload), `cod`
 - `free_delivery` coupon type zeros the delivery fee — handled in both `createOrder` (server) and `CheckoutClient` (client display)
 - Phone numbers: stored as `+94XXXXXXXXX`. The checkout UI shows a `+94` prefix badge; user types 9 digits. Strip/prepend on read/write.
-- Bank receipts: uploaded to the private `receipts` Supabase Storage bucket. Path (not URL) stored in `bank_transfer_receipts.image_url`. Admin generates signed URLs in Phase 5.
+- Bank receipts: uploaded to the private `receipts` Supabase Storage bucket. Path (not URL) stored in `bank_transfer_receipts.image_url`. Admin pages generate 1-hour signed URLs server-side via `admin.storage.from("receipts").createSignedUrl(path, 3600)` — never store or pass URLs directly.
 - `lib/payments/payhere.ts` gracefully no-ops when `PAYHERE_MERCHANT_ID` / `PAYHERE_MERCHANT_SECRET` are empty.
 
 ## Environment variables

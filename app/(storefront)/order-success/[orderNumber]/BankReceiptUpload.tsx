@@ -97,6 +97,7 @@ export function BankReceiptUpload({ orderId, alreadyUploaded = false }: Props) {
         {/* Preview */}
         <div className="flex items-center gap-3">
           {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt="Receipt preview"

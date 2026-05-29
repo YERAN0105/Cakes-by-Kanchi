@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CustomizationValues } from "@/lib/validations/customization";
-import type { AppliedCoupon } from "@/types/database";
+import type { AppliedCoupon, PriceLineItem } from "@/types/database";
 import { computeDiscount } from "@/lib/cart-utils";
 
 export type { AppliedCoupon };
@@ -21,6 +21,7 @@ export interface CartItem {
   snapshot: CartItemSnapshot;
   customization: CustomizationValues;
   customizationSummary: string[];
+  priceBreakdown?: PriceLineItem[];
   unitPrice: number;
   lineTotal: number;
 }

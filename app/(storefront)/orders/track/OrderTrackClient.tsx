@@ -7,6 +7,9 @@ import { formatCurrency } from "@/lib/brand";
 import { Container } from "@/components/shared/Container";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
+
+const TZ = "Asia/Colombo";
 
 interface OrderStatusHistory {
   status: string;
@@ -207,7 +210,7 @@ export function OrderTrackClient() {
                           </p>
                           {h.note && <p className="text-ink-light text-xs">{h.note}</p>}
                           <p className="text-ink-light text-xs mt-0.5">
-                            {format(new Date(h.changed_at), "d MMM yyyy, h:mm a")}
+                            {formatInTimeZone(new Date(h.changed_at), TZ, "d MMM yyyy, h:mm a")}
                           </p>
                         </div>
                       </li>

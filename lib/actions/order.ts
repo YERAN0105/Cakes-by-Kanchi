@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { customizationSchema, type CustomizationValues } from "@/lib/validations/customization";
+import { buildPriceBreakdown } from "@/lib/cart-utils";
 import { z } from "zod";
 import type {
   ProductWithDetails,
@@ -115,7 +116,10 @@ function computeItemPrice(product: ProductWithDetails, c: CustomizationValues): 
     : 0;
   const addonTotal = product.product_addons
     .filter((a) => c.addon_ids.includes(a.addons.id))
-    .reduce((sum, a) => sum + parseFloat(a.addons.price), 0);
+    .reduce((sum, a) => {
+      const qty = c.addon_quantities?.[a.addons.id] ?? 1;
+      return sum + parseFloat(a.addons.price) * qty;
+    }, 0);
 
   return basePrice + flavorMod + tierMod + egglessMod + veganMod + glutenFreeMod + addonTotal;
 }
@@ -249,6 +253,7 @@ export async function createOrder(raw: CreateOrderPayload): Promise<CreateOrderR
       sizePrice: parseFloat(sizeRow?.price ?? product.base_price),
       flavorName: flavorRow?.name ?? null,
       tierName: tierRow ? (tierLabels[tierRow.tier_count] ?? `${tierRow.tier_count}-Tier`) : null,
+      priceBreakdown: buildPriceBreakdown(product, item.customization),
     };
 
     orderItemsData.push({ productId: product.id, customization: item.customization, unitPrice, lineTotal, productSnapshot });

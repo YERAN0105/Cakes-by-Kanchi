@@ -66,9 +66,15 @@ Supabase's generic client frequently returns `never` for complex joined queries.
 
 React Hook Form + Zod. Never add `.default()` to Zod fields — it creates a type mismatch between input and output types that breaks `zodResolver`. Put all defaults in RHF's `defaultValues` option instead. See `lib/validations/customization.ts` for the pattern.
 
+### Timestamps and timezones
+
+Supabase stores all timestamps in UTC. The server (Node.js) also runs in UTC, so plain `format()` from `date-fns` will display UTC time. **Always use `formatInTimeZone(date, "Asia/Colombo", pattern)` from `date-fns-tz`** for any DB timestamp displayed to users. Convention: declare `const TZ = "Asia/Colombo"` at the top of each file.
+
+Exception: delivery dates stored as `YYYY-MM-DD` strings — appending `T00:00:00` and using plain `format()` is correct since they have no time component.
+
 ### Client state
 
-- `stores/wishlist.ts` — Zustand with `persist` middleware (localStorage key `cakery-wishlist`). Page at `app/(storefront)/account/wishlist/page.tsx` fetches full product details from Supabase using the stored IDs. Local-only until Phase 4 wires it to the DB (merge on login).
+- `stores/wishlist.ts` — Zustand with `persist` middleware (localStorage key `cakery-wishlist`). Synced to the `wishlist` DB table on login via `WishlistSync` component in the storefront layout. Page at `app/(storefront)/account/wishlist/page.tsx` fetches full product details from Supabase using the stored IDs.
 - `stores/cart.ts` — Zustand with `persist` middleware (localStorage key `cakery-cart`). Holds `items`, `appliedCoupon`, `isDrawerOpen`, `_hasHydrated`. `_hasHydrated` must be checked before rendering cart UI to avoid hydration mismatches. `validateAndPriceItem()` in `lib/actions/cart.ts` re-prices items server-side on every add. Cart price is re-validated again in `createOrder` — never trust client totals. Every cart mutation (`addItem`, `removeItem`, `updateQuantity`) calls `refreshCoupon()` to recompute `discountAmount` live using `computeDiscount()` from `lib/cart-utils.ts` — the `maxDiscount` field on `AppliedCoupon` must stay populated for this to work.
 
 ### Key API routes
@@ -100,15 +106,22 @@ The `components/ui/` directory was initially empty — components are built manu
 
 The storefront layout (`app/(storefront)/layout.tsx`) is `async` and fetches categories once via `getAllCategories()`, passing them down to `Header` as props. Do not fetch categories again inside individual pages.
 
+### Price breakdown
+
+`buildPriceBreakdown(product, customization): PriceLineItem[]` in `lib/cart-utils.ts` returns a labelled breakdown of how a unit price is composed (base size price + modifiers + add-ons with quantities). Called in `validateAndPriceItem` (cart add) and `createOrder` (order creation) and stored in `CartItem.priceBreakdown` and `ProductSnapshot.priceBreakdown` respectively. Both fields are optional for backwards compatibility with old cart/order data.
+
+Add-on quantities are stored as `addon_quantities: Record<string, number>` on `CustomizationValues` (optional, defaults to 1 per add-on). The `−/qty/+` stepper in `CustomizationEngine` writes this field; `calculateUnitPrice` and `buildPriceBreakdown` read it.
+
 ### Phased build
 
-The project is built in 6 phases (see `MASTER_SPEC.md` §10). Phases 1–3 are complete. Add features only within the phase currently being built.
+The project is built in 6 phases (see `MASTER_SPEC.md` §10). Phases 1–4 are complete. Add features only within the phase currently being built.
 
-Current boundary: **Phase 4 (Customer Account)** — order history, saved addresses, wishlist DB sync, loyalty points, reviews, profile. Key starting points:
-- `addresses` table is already populated by Phase 3 checkout — do NOT redesign this data model. Read/write the same table from `/account/addresses`.
-- Wishlist store (`stores/wishlist.ts`) is local-only — Phase 4 should merge it with the DB on login.
-- Loyalty points are reserved in `createOrder` but never redeemed yet — Phase 4 adds the redemption UI.
-- The stub at `app/(storefront)/account/page.tsx` needs to be replaced (currently just a placeholder).
+Current boundary: **Phase 5 (Admin Panel)** — order management, product/category CRUD, coupon management, delivery zone settings, time slot management, user management.
+
+Key Phase 5 wiring points:
+- `earnLoyaltyPointsAction(orderId)` in `lib/actions/account.ts` is fully written but never called — Phase 5 should call it when an admin marks an order as `delivered`.
+- Bank transfer receipts are stored as paths (not public URLs) in `bank_transfer_receipts.image_url` — Phase 5 admin must generate signed URLs via `admin.storage.from("receipts").createSignedUrl(path, 3600)` to display them.
+- `time_slots` table supports full CRUD — add, edit label/capacity, deactivate. Capacity is enforced live via `app/api/slots/capacity/route.ts` which counts non-cancelled orders per slot per date.
 
 ### Business model
 

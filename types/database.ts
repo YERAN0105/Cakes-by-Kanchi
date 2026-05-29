@@ -877,6 +877,12 @@ export interface AddressSnapshot {
   label?: string;
 }
 
+/** One line in a price breakdown (base price or a modifier) */
+export interface PriceLineItem {
+  label: string;
+  amount: number;
+}
+
 /** Product snapshot stored on order_items at placement time */
 export interface ProductSnapshot {
   id: string;
@@ -887,4 +893,5 @@ export interface ProductSnapshot {
   sizePrice: number;
   flavorName: string | null;
   tierName: string | null;
+  priceBreakdown?: PriceLineItem[];
 }

@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Shield,
   BadgeCheck,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, brand } from "@/lib/brand";
@@ -126,6 +127,14 @@ export function CheckoutClient({
   const _hasHydrated = useCartStore((s) => s._hasHydrated);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedBreakdowns, setExpandedBreakdowns] = useState<Set<string>>(new Set());
+  const toggleBreakdown = (id: string) =>
+    setExpandedBreakdowns((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -881,25 +890,49 @@ export function CheckoutClient({
               <h2 className="font-display text-lg font-semibold text-ink">Order Summary</h2>
 
               {/* Items */}
-              <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {items.map((item) => (
-                  <div key={item.cartItemId} className="flex gap-2 text-sm font-body">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-ink line-clamp-1">
-                        {item.snapshot.name}
-                        {item.customization.quantity > 1 && (
-                          <span className="ml-1.5 text-xs font-semibold text-wine">
-                            ×{item.customization.quantity}
-                          </span>
-                        )}
-                      </p>
-                      {item.customizationSummary.length > 0 && (
-                        <p className="text-xs text-ink-light line-clamp-1">
-                          {item.customizationSummary.slice(0, 3).join(" · ")}
+                  <div key={item.cartItemId} className="text-sm font-body">
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-ink line-clamp-1">
+                          {item.snapshot.name}
+                          {item.customization.quantity > 1 && (
+                            <span className="ml-1.5 text-xs font-semibold text-wine">
+                              ×{item.customization.quantity}
+                            </span>
+                          )}
                         </p>
-                      )}
+                        {item.customizationSummary.length > 0 && (
+                          <p className="text-xs text-ink-light mt-0.5">
+                            {item.customizationSummary.join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                      <p className="font-medium text-wine shrink-0">{formatCurrency(item.lineTotal)}</p>
                     </div>
-                    <p className="font-medium text-wine shrink-0">{formatCurrency(item.lineTotal)}</p>
+                    {item.priceBreakdown && item.priceBreakdown.length > 1 && (
+                      <div className="mt-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleBreakdown(item.cartItemId)}
+                          className="flex items-center gap-1 text-xs text-wine hover:text-wine/80 transition-colors font-body"
+                        >
+                          <ChevronDown className={cn("w-3 h-3 transition-transform", expandedBreakdowns.has(item.cartItemId) ? "rotate-180" : "")} />
+                          How is this calculated?
+                        </button>
+                        {expandedBreakdowns.has(item.cartItemId) && (
+                          <div className="mt-1.5 pl-2 border-l-2 border-blush space-y-0.5">
+                            {item.priceBreakdown.map((line, i) => (
+                              <div key={i} className="flex justify-between text-xs font-body text-ink-light">
+                                <span>{line.label}</span>
+                                <span>{i === 0 ? formatCurrency(line.amount) : `+${formatCurrency(line.amount)}`}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

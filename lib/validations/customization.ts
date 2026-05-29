@@ -11,6 +11,7 @@ export const customizationSchema = z.object({
   message: z.string().max(50, "Message must be 50 characters or less").optional(),
   color_theme: z.string().max(100).optional(),
   addon_ids: z.array(z.string()),
+  addon_quantities: z.record(z.string(), z.number().int().min(1).max(99)).optional(),
   special_instructions: z.string().max(500, "Special instructions must be 500 characters or less").optional(),
   photo_url: z.string().optional(),
   quantity: z.number().int().min(1).max(10),

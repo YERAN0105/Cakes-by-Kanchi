@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Search, Heart, ShoppingBag, User, Menu, X, ChevronDown } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Search, Heart, ShoppingBag, User, Menu, X, ChevronDown, LogOut, Package, MapPin } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { BrandLogo } from "@/components/shared/BrandLogo";
 import { Container } from "@/components/shared/Container";
 import { SearchModal } from "@/components/storefront/SearchModal";
 import { useWishlistStore } from "@/stores/wishlist";
 import { useCartStore } from "@/stores/cart";
+import { logoutAction } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
 import type { CategoryRow } from "@/types/database";
 
@@ -21,16 +22,28 @@ const OTHER_NAV = [
 
 interface HeaderProps {
   categories: CategoryRow[];
+  user: { id: string; name: string; email: string } | null;
 }
 
-export function Header({ categories }: HeaderProps) {
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+export function Header({ categories, user }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCakesOpen, setMobileCakesOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  const router = useRouter();
   const wishlistCount = useWishlistStore((s) => s.count);
   const cartCount = useCartStore((s) => s.count);
   const openCartDrawer = useCartStore((s) => s.openDrawer);
@@ -54,11 +67,13 @@ export function Header({ categories }: HeaderProps) {
   useEffect(() => { setMobileOpen(false); setMobileCakesOpen(false); }, [pathname]);
   useEffect(() => { setSearchOpen(false); }, [pathname]);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setDropdownOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -66,6 +81,13 @@ export function Header({ categories }: HeaderProps) {
   }, []);
 
   const cakesActive = pathname === "/cakes" || pathname.startsWith("/cakes/");
+  const accountActive = pathname.startsWith("/account");
+
+  const handleLogout = async () => {
+    setUserMenuOpen(false);
+    await logoutAction();
+    router.refresh();
+  };
 
   return (
     <>
@@ -81,7 +103,6 @@ export function Header({ categories }: HeaderProps) {
 
           {/* Desktop nav */}
           <nav className="hidden lg:flex items-center gap-8" aria-label="Main navigation">
-            {/* Cakes dropdown */}
             <div ref={dropdownRef} className="relative">
               <button
                 type="button"
@@ -175,13 +196,67 @@ export function Header({ categories }: HeaderProps) {
               )}
             </Link>
 
-            <Link
-              href="/account"
-              aria-label="Account"
-              className="p-2 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors duration-200"
-            >
-              <User className="w-5 h-5" aria-hidden="true" />
-            </Link>
+            {/* User icon / avatar */}
+            {user ? (
+              <div ref={userMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  aria-label="Account menu"
+                  aria-expanded={userMenuOpen}
+                  className={cn(
+                    "w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold font-body transition-colors duration-200",
+                    accountActive || userMenuOpen
+                      ? "bg-wine text-cream"
+                      : "bg-blush text-wine hover:bg-wine hover:text-cream"
+                  )}
+                >
+                  {getInitials(user.name)}
+                </button>
+
+                <AnimatePresence>
+                  {userMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute top-full right-0 mt-3 w-52 bg-cream border border-border rounded-xl shadow-lg py-2 z-50"
+                    >
+                      <div className="px-4 py-2 border-b border-border mb-1">
+                        <p className="text-sm font-medium text-ink font-body truncate">{user.name}</p>
+                        <p className="text-xs text-ink-light font-body truncate">{user.email}</p>
+                      </div>
+                      <Link href="/account" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2 text-sm font-body text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                        <User className="w-4 h-4" aria-hidden="true" /> My Account
+                      </Link>
+                      <Link href="/account/orders" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2 text-sm font-body text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                        <Package className="w-4 h-4" aria-hidden="true" /> My Orders
+                      </Link>
+                      <Link href="/account/addresses" onClick={() => setUserMenuOpen(false)} className="flex items-center gap-2.5 px-4 py-2 text-sm font-body text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                        <MapPin className="w-4 h-4" aria-hidden="true" /> Addresses
+                      </Link>
+                      <div className="h-px bg-border mx-3 my-1" />
+                      <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="flex items-center gap-2.5 w-full px-4 py-2 text-sm font-body text-ink-light hover:text-destructive hover:bg-blush-light transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" aria-hidden="true" /> Sign Out
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <Link
+                href="/account"
+                aria-label="Account"
+                className="p-2 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors duration-200"
+              >
+                <User className="w-5 h-5" aria-hidden="true" />
+              </Link>
+            )}
 
             <button
               type="button"
@@ -228,7 +303,6 @@ export function Header({ categories }: HeaderProps) {
               className="lg:hidden overflow-hidden border-t border-border bg-cream"
             >
               <nav className="flex flex-col py-4 px-4 gap-1" aria-label="Mobile navigation">
-                {/* Cakes expandable */}
                 <button
                   type="button"
                   onClick={() => setMobileCakesOpen((v) => !v)}
@@ -291,12 +365,38 @@ export function Header({ categories }: HeaderProps) {
                 ))}
 
                 <div className="h-px bg-border my-2" />
-                <Link
-                  href="/account"
-                  className="font-body text-base py-3 px-3 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors"
-                >
-                  My Account
-                </Link>
+
+                {user ? (
+                  <>
+                    <div className="px-3 py-2">
+                      <p className="text-xs text-ink-light font-body">Signed in as</p>
+                      <p className="text-sm font-medium text-ink font-body truncate">{user.name}</p>
+                    </div>
+                    <Link href="/account" className="font-body text-base py-3 px-3 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                      My Account
+                    </Link>
+                    <Link href="/account/orders" className="font-body text-base py-3 px-3 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                      My Orders
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="text-left font-body text-base py-3 px-3 rounded-md text-ink-light hover:text-destructive hover:bg-blush-light transition-colors"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/account" className="font-body text-base py-3 px-3 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                      My Account
+                    </Link>
+                    <Link href="/login" className="font-body text-base py-3 px-3 rounded-md text-ink hover:text-wine hover:bg-blush-light transition-colors">
+                      Sign In
+                    </Link>
+                  </>
+                )}
+
                 <button
                   type="button"
                   onClick={() => { setMobileOpen(false); setSearchOpen(true); }}

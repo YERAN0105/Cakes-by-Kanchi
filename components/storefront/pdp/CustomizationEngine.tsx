@@ -10,7 +10,7 @@ import { HelpCircle, Minus, Plus, Check, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/brand";
 import { customizationSchema, type CustomizationValues } from "@/lib/validations/customization";
-import { buildCustomizationSummary } from "@/lib/cart-utils";
+import { buildCustomizationSummary, buildPriceBreakdown } from "@/lib/cart-utils";
 import { validateAndPriceItem } from "@/lib/actions/cart";
 import { useCartStore } from "@/stores/cart";
 import { createClient } from "@/lib/supabase/client";
@@ -58,6 +58,7 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
       vegan: false,
       gluten_free: false,
       addon_ids: [],
+      addon_quantities: {},
       quantity: 1,
     },
   });
@@ -78,7 +79,10 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
   const egglessMod = values.eggless ? parseFloat(egglessOption?.price_modifier ?? "0") : 0;
   const veganMod = values.vegan ? parseFloat(veganOption?.price_modifier ?? "0") : 0;
   const glutenFreeMod = values.gluten_free ? parseFloat(glutenFreeOption?.price_modifier ?? "0") : 0;
-  const addonTotal = selectedAddons.reduce((sum, a) => sum + parseFloat(a.price), 0);
+  const addonTotal = selectedAddons.reduce((sum, a) => {
+    const qty = values.addon_quantities?.[a.id] ?? 1;
+    return sum + parseFloat(a.price) * qty;
+  }, 0);
 
   const unitPrice = basePrice + flavorMod + tierMod + egglessMod + veganMod + glutenFreeMod + addonTotal;
   const totalPrice = unitPrice * (values.quantity ?? 1);
@@ -121,7 +125,7 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
         return;
       }
 
-      const { unitPrice } = result;
+      const { unitPrice, priceBreakdown } = result;
       const lineTotal = unitPrice * data.quantity;
       const primaryImage =
         product.product_images.find((i) => i.is_primary)?.url ??
@@ -138,6 +142,7 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
         },
         customization: customizationWithPhoto,
         customizationSummary: buildCustomizationSummary(product, customizationWithPhoto),
+        priceBreakdown,
         unitPrice,
         lineTotal,
       });
@@ -479,47 +484,100 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
               <div className="space-y-2">
                 {addons.map(({ addons: addon }) => {
                   const checked = field.value.includes(addon.id);
+                  const qty = values.addon_quantities?.[addon.id] ?? 1;
+                  const addonPrice = parseFloat(addon.price);
                   return (
-                    <label
+                    <div
                       key={addon.id}
                       className={cn(
-                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all duration-200",
-                        checked
-                          ? "border-wine bg-wine/5"
-                          : "border-border hover:border-wine/40 bg-card"
+                        "rounded-lg border transition-all duration-200",
+                        checked ? "border-wine bg-wine/5" : "border-border bg-card"
                       )}
                     >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            field.onChange([...field.value, addon.id]);
-                          } else {
-                            field.onChange(field.value.filter((id) => id !== addon.id));
-                          }
-                        }}
-                        className="w-4 h-4 accent-wine cursor-pointer"
-                        aria-label={addon.name}
-                      />
-                      {addon.image_url && (
-                        <Image src={addon.image_url} alt={addon.name} width={36} height={36} className="rounded object-cover" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-body font-medium text-ink">{addon.name}</p>
-                        {addon.description && (
-                          <p className="text-xs text-ink-light truncate">{addon.description}</p>
+                      <label className="flex items-center gap-3 p-3 cursor-pointer hover:bg-wine/[0.03] transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              field.onChange([...field.value, addon.id]);
+                              setValue("addon_quantities", { ...(values.addon_quantities ?? {}), [addon.id]: 1 });
+                            } else {
+                              field.onChange(field.value.filter((id) => id !== addon.id));
+                              const next = { ...(values.addon_quantities ?? {}) };
+                              delete next[addon.id];
+                              setValue("addon_quantities", next);
+                            }
+                          }}
+                          className="w-4 h-4 accent-wine cursor-pointer shrink-0"
+                          aria-label={addon.name}
+                        />
+                        {addon.image_url && (
+                          <Image src={addon.image_url} alt={addon.name} width={36} height={36} className="rounded object-cover shrink-0" />
                         )}
-                      </div>
-                      <p className="text-sm font-body font-medium text-wine shrink-0">
-                        +{formatCurrency(parseFloat(addon.price))}
-                      </p>
-                    </label>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-body font-medium text-ink">{addon.name}</p>
+                          {addon.description && (
+                            <p className="text-xs text-ink-light truncate">{addon.description}</p>
+                          )}
+                        </div>
+                        <p className="text-sm font-body font-medium text-wine shrink-0">
+                          +{formatCurrency(addonPrice)}{qty > 1 ? "/unit" : ""}
+                        </p>
+                      </label>
+
+                      {checked && (
+                        <div className="flex items-center justify-between px-3 pb-3 border-t border-wine/10 pt-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-ink-light font-body">Qty:</span>
+                            <button
+                              type="button"
+                              onClick={() => setValue("addon_quantities", { ...(values.addon_quantities ?? {}), [addon.id]: Math.max(1, qty - 1) })}
+                              disabled={qty <= 1}
+                              aria-label={`Decrease ${addon.name} quantity`}
+                              className="w-6 h-6 rounded border border-border flex items-center justify-center text-ink hover:border-wine hover:text-wine transition-colors disabled:opacity-40"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="w-5 text-center text-sm font-body font-medium text-ink tabular-nums">{qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => setValue("addon_quantities", { ...(values.addon_quantities ?? {}), [addon.id]: Math.min(99, qty + 1) })}
+                              disabled={qty >= 99}
+                              aria-label={`Increase ${addon.name} quantity`}
+                              className="w-6 h-6 rounded border border-border flex items-center justify-center text-ink hover:border-wine hover:text-wine transition-colors disabled:opacity-40"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {qty > 1 && (
+                            <p className="text-xs font-body text-wine">
+                              Total: +{formatCurrency(addonPrice * qty)}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
             )}
           />
+
+          {/* Number candle hint */}
+          {selectedAddons.some((a) => a.name.toLowerCase().includes("number")) && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-2 flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200"
+            >
+              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" aria-hidden="true" />
+              <p className="text-xs font-body text-amber-700">
+                <span className="font-medium">Number candles selected — </span>
+                please specify which numbers you need in the Special Instructions field below.
+              </p>
+            </motion.div>
+          )}
         </div>
       )}
 
@@ -597,35 +655,10 @@ export function CustomizationEngine({ product }: CustomizationEngineProps) {
             animate={{ height: "auto", opacity: 1 }}
             className="overflow-hidden text-xs font-body text-ink-light space-y-1 pt-2 border-t border-blush"
           >
-            <div className="flex justify-between">
-              <span>Base ({selectedSize?.label ?? "size"})</span>
-              <span>{formatCurrency(parseFloat(selectedSize?.price ?? product.base_price))}</span>
-            </div>
-            {flavorMod > 0 && (
-              <div className="flex justify-between">
-                <span>Flavour ({selectedFlavor?.name})</span>
-                <span>+{formatCurrency(flavorMod)}</span>
-              </div>
-            )}
-            {tierMod > 0 && (
-              <div className="flex justify-between">
-                <span>Tiers</span>
-                <span>+{formatCurrency(tierMod)}</span>
-              </div>
-            )}
-            {egglessMod > 0 && (
-              <div className="flex justify-between"><span>Eggless</span><span>+{formatCurrency(egglessMod)}</span></div>
-            )}
-            {veganMod > 0 && (
-              <div className="flex justify-between"><span>Vegan</span><span>+{formatCurrency(veganMod)}</span></div>
-            )}
-            {glutenFreeMod > 0 && (
-              <div className="flex justify-between"><span>Gluten-Free</span><span>+{formatCurrency(glutenFreeMod)}</span></div>
-            )}
-            {selectedAddons.map((a) => (
-              <div key={a.id} className="flex justify-between">
-                <span>{a.name}</span>
-                <span>+{formatCurrency(parseFloat(a.price))}</span>
+            {buildPriceBreakdown(product, values).map((line, i) => (
+              <div key={i} className="flex justify-between">
+                <span>{line.label}</span>
+                <span>{i === 0 ? formatCurrency(line.amount) : `+${formatCurrency(line.amount)}`}</span>
               </div>
             ))}
             {(values.quantity ?? 1) > 1 && (

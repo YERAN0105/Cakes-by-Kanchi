@@ -2,15 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { customizationSchema, type CustomizationValues } from "@/lib/validations/customization";
-import type { ProductWithDetails, AppliedCoupon } from "@/types/database";
+import type { ProductWithDetails, AppliedCoupon, PriceLineItem } from "@/types/database";
 import type { Database } from "@/types/database";
+import { buildPriceBreakdown } from "@/lib/cart-utils";
 
 type CouponRow = Database["public"]["Tables"]["coupons"]["Row"];
 
 export async function validateAndPriceItem(
   productId: string,
   customization: CustomizationValues
-): Promise<{ unitPrice: number } | { error: string }> {
+): Promise<{ unitPrice: number; priceBreakdown: PriceLineItem[] } | { error: string }> {
   const parsed = customizationSchema.safeParse(customization);
   if (!parsed.success) return { error: parsed.error.errors[0].message };
 
@@ -19,7 +20,7 @@ export async function validateAndPriceItem(
   const { data, error } = await supabase
     .from("products")
     .select(
-      `*, product_sizes(*), product_flavors(*), product_tier_options(*), product_dietary_options(*), product_addons(addons(*))`
+      `*, product_sizes(*), product_flavors(*), product_tier_options(*), product_dietary_options(*), product_addons(addons(*)), product_shapes(*), product_images(*)`
     )
     .eq("id", productId)
     .eq("is_published", true)
@@ -54,12 +55,17 @@ export async function validateAndPriceItem(
   const glutenFreeMod = c.gluten_free ? parseFloat(glutenFreeOption?.price_modifier ?? "0") : 0;
   const addonTotal = product.product_addons
     .filter((a) => c.addon_ids.includes(a.addons.id))
-    .reduce((sum, a) => sum + parseFloat(a.addons.price), 0);
+    .reduce((sum, a) => {
+      const qty = c.addon_quantities?.[a.addons.id] ?? 1;
+      return sum + parseFloat(a.addons.price) * qty;
+    }, 0);
 
   const unitPrice =
     basePrice + flavorMod + tierMod + egglessMod + veganMod + glutenFreeMod + addonTotal;
 
-  return { unitPrice };
+  const priceBreakdown = buildPriceBreakdown(product, c);
+
+  return { unitPrice, priceBreakdown };
 }
 
 export async function validateCoupon(

@@ -4,6 +4,8 @@ import { Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useWishlistStore } from "@/stores/wishlist";
+import { useSupabaseUser } from "@/hooks/useSupabaseUser";
+import { toggleWishlistDbAction } from "@/lib/actions/account";
 import { cn } from "@/lib/utils";
 
 interface WishlistButtonProps {
@@ -16,13 +18,21 @@ interface WishlistButtonProps {
 export function WishlistButton({ productId, productName, className, size = "sm" }: WishlistButtonProps) {
   const toggle = useWishlistStore((s) => s.toggle);
   const isWishlisted = useWishlistStore((s) => s.isWishlisted(productId));
+  const user = useSupabaseUser();
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const handleToggle = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
     toggle(productId);
     if (!isWishlisted) {
       toast.success(`${productName} saved to wishlist`);
+    }
+
+    if (user) {
+      toggleWishlistDbAction(productId).catch(() => {
+        toggle(productId);
+      });
     }
   };
 

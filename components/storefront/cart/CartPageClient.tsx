@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ShoppingBag, Minus, Plus, Trash2, Tag, X, AlertTriangle } from "lucide-react";
+import { ShoppingBag, Minus, Plus, Trash2, Tag, X, AlertTriangle, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/brand";
 import { useCartStore } from "@/stores/cart";
@@ -26,6 +26,16 @@ export function CartPageClient() {
 
   const [couponInput, setCouponInput] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
+  const [expandedBreakdowns, setExpandedBreakdowns] = useState<Set<string>>(new Set());
+
+  const toggleBreakdown = (cartItemId: string) => {
+    setExpandedBreakdowns((prev) => {
+      const next = new Set(prev);
+      if (next.has(cartItemId)) next.delete(cartItemId);
+      else next.add(cartItemId);
+      return next;
+    });
+  };
 
   const discount = appliedCoupon?.discountAmount ?? 0;
   const total = Math.max(0, subtotal - discount);
@@ -94,7 +104,7 @@ export function CartPageClient() {
           {items.map((item) => (
             <motion.div
               key={item.cartItemId}
-              layout
+              layout="position"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -20 }}
@@ -141,6 +151,33 @@ export function CartPageClient() {
                       <p className="text-xs text-ink-light mt-0.5">
                         Note: {item.customization.special_instructions}
                       </p>
+                    )}
+
+                    {item.priceBreakdown && item.priceBreakdown.length > 0 && (
+                      <div className="mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleBreakdown(item.cartItemId)}
+                          className="flex items-center gap-1 text-xs text-wine hover:text-wine/80 transition-colors font-body"
+                        >
+                          <ChevronDown className={cn("w-3 h-3 transition-transform", expandedBreakdowns.has(item.cartItemId) ? "rotate-180" : "")} />
+                          How is this calculated?
+                        </button>
+                        {expandedBreakdowns.has(item.cartItemId) && (
+                          <div className="mt-1.5 pl-2 border-l-2 border-blush space-y-0.5">
+                            {item.priceBreakdown.map((line, i) => (
+                              <div key={i} className="flex justify-between text-xs font-body text-ink-light">
+                                <span>{line.label}</span>
+                                <span>{i === 0 ? formatCurrency(line.amount) : `+${formatCurrency(line.amount)}`}</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-xs font-body font-medium text-ink border-t border-border pt-1 mt-1">
+                              <span>Unit price</span>
+                              <span>{formatCurrency(item.unitPrice)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   <button

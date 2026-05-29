@@ -1,14 +1,13 @@
-"use client";
-
-import { useEffect, useState } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Heart } from "lucide-react";
-import { Container } from "@/components/shared/Container";
-import { ProductCard } from "@/components/storefront/products/ProductCard";
-import { ProductCardSkeleton } from "@/components/storefront/products/ProductCardSkeleton";
-import { useWishlistStore } from "@/stores/wishlist";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { WishlistPageClient } from "./WishlistPageClient";
 import type { ProductListItem } from "@/types/database";
+
+export const metadata: Metadata = { title: "My Wishlist" };
 
 const PRODUCT_LIST_SELECT = `
   id, slug, name, base_price, is_featured, is_bestseller,
@@ -18,63 +17,59 @@ const PRODUCT_LIST_SELECT = `
   product_sizes ( price )
 `;
 
-export default function WishlistPage() {
-  const items = useWishlistStore((s) => s.items);
-  const [products, setProducts] = useState<ProductListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export default async function WishlistPage() {
+  const supabase = await createClient();
+  const {
+    data: { user: authUser },
+  } = await supabase.auth.getUser();
+  if (!authUser) redirect("/login");
 
-  useEffect(() => {
-    if (items.length === 0) {
-      setProducts([]);
-      setLoading(false);
-      return;
-    }
+  const admin = createAdminClient();
 
-    const supabase = createClient();
-    supabase
+  const { data: wishlistRows } = await admin
+    .from("wishlist")
+    .select("product_id")
+    .eq("user_id", authUser.id);
+
+  const productIds = (wishlistRows ?? []).map((r) => r.product_id);
+
+  let products: ProductListItem[] = [];
+  if (productIds.length > 0) {
+    const { data } = await admin
       .from("products")
       .select(PRODUCT_LIST_SELECT)
-      .in("id", items)
-      .eq("is_published", true)
-      .then(({ data }) => {
-        setProducts((data as unknown as ProductListItem[]) ?? []);
-        setLoading(false);
-      });
-  }, [items]);
+      .in("id", productIds)
+      .eq("is_published", true);
+    products = (data as unknown as ProductListItem[]) ?? [];
+  }
+
+  if (products.length === 0) {
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="font-display text-3xl font-semibold text-ink">My Wishlist</h1>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-12 text-center">
+          <Heart className="w-12 h-12 text-blush mx-auto mb-4 stroke-1" aria-hidden="true" />
+          <p className="font-display text-xl text-ink mb-1">Your wishlist is empty</p>
+          <p className="text-sm text-ink-light font-body mb-5">
+            Save cakes you love by tapping the heart icon on any product.
+          </p>
+          <Link href="/cakes" className="btn-primary px-6 py-2.5 text-sm">
+            Browse Cakes
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section className="section-pad min-h-[60vh]">
-      <Container>
-        <div className="mb-10">
-          <p className="label-small text-wine mb-2">Your Collection</p>
-          <h1 className="heading-md">Wishlist</h1>
-        </div>
-
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
-            {[...Array(4)].map((_, i) => (
-              <ProductCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-5 text-center">
-            <Heart className="w-12 h-12 text-blush stroke-1" aria-hidden="true" />
-            <p className="font-display text-2xl text-ink">Your wishlist is empty</p>
-            <p className="body-base max-w-xs">
-              Save cakes you love by tapping the heart icon on any product.
-            </p>
-            <Link href="/cakes" className="btn-primary mt-2">
-              Browse Cakes
-            </Link>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5 lg:gap-6">
-            {products.map((product, i) => (
-              <ProductCard key={product.id} product={product} delay={i * 0.06} />
-            ))}
-          </div>
-        )}
-      </Container>
-    </section>
+    <div>
+      <div className="mb-6">
+        <h1 className="font-display text-3xl font-semibold text-ink">My Wishlist</h1>
+        <p className="body-base text-ink-light mt-1">{products.length} saved item{products.length !== 1 ? "s" : ""}</p>
+      </div>
+      <WishlistPageClient products={products} dbIds={productIds} />
+    </div>
   );
 }

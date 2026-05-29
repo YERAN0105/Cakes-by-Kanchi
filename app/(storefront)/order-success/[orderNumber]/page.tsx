@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { CheckCircle2, Clock, Calendar, MapPin, CreditCard, Building2, Banknote } from "lucide-react";
 import { formatCurrency, brand } from "@/lib/brand";
 import { BankReceiptUpload } from "./BankReceiptUpload";
+import { BankDetails } from "./BankDetails";
 import { Container } from "@/components/shared/Container";
 import { format } from "date-fns";
 import type { Database, AddressSnapshot } from "@/types/database";
@@ -30,7 +31,7 @@ export default async function OrderSuccessPage({ params, searchParams }: Props) 
 
   const { data: rawOrder } = await admin
     .from("orders")
-    .select("*, order_items(*, time_slots(label, start_time, end_time))")
+    .select("*, order_items(id, product_snapshot, customization, unit_price, line_total)")
     .eq("order_number", orderNumber)
     .single();
 
@@ -51,10 +52,18 @@ export default async function OrderSuccessPage({ params, searchParams }: Props) 
     notFound();
   }
 
-  // Fetch time slot label
-  const { data: slotRaw } = order.time_slot_id
-    ? await admin.from("time_slots").select("label").eq("id", order.time_slot_id).single()
-    : { data: null };
+  // Fetch time slot label + existing receipt in parallel
+  const [slotResult, receiptResult] = await Promise.all([
+    order.time_slot_id
+      ? admin.from("time_slots").select("label").eq("id", order.time_slot_id).single()
+      : Promise.resolve({ data: null }),
+    order.payment_method === "bank_transfer"
+      ? admin.from("bank_transfer_receipts").select("id").eq("order_id", order.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const slotRaw = slotResult.data;
+  const hasReceipt = !!receiptResult.data;
 
   const slot = slotRaw as unknown as Pick<TimeSlotRow, "label"> | null;
 
@@ -225,33 +234,18 @@ export default async function OrderSuccessPage({ params, searchParams }: Props) 
       {order.payment_method === "bank_transfer" && (
         <div className="rounded-xl border border-border bg-card p-5 space-y-4 mb-6">
           <h2 className="font-display text-lg font-semibold text-ink">Bank Transfer Details</h2>
-          <div className="space-y-2 text-sm font-body bg-blush-light/60 rounded-lg p-4">
-            <p>
-              <span className="text-ink-light">Bank:</span>{" "}
-              <span className="font-medium text-ink">Commercial Bank of Ceylon</span>
-            </p>
-            <p>
-              <span className="text-ink-light">Account name:</span>{" "}
-              <span className="font-medium text-ink">{brand.name}</span>
-            </p>
-            <p>
-              <span className="text-ink-light">Account number:</span>{" "}
-              <span className="font-medium text-ink font-mono">1234567890</span>
-            </p>
-            <p>
-              <span className="text-ink-light">Branch:</span>{" "}
-              <span className="font-medium text-ink">Colombo 03</span>
-            </p>
-            <p>
-              <span className="text-ink-light">Reference:</span>{" "}
-              <span className="font-medium text-wine font-mono">{order.order_number}</span>
-            </p>
-          </div>
+          <BankDetails fields={[
+            { label: "Bank",           value: "Commercial Bank of Ceylon" },
+            { label: "Account name",   value: brand.name,          copyable: true },
+            { label: "Account number", value: "1234567890",         copyable: true, mono: true },
+            { label: "Branch",         value: "Colombo 03" },
+            { label: "Reference",      value: order.order_number,  copyable: true, highlight: true },
+          ]} />
           <p className="text-xs text-ink-light">
             Please include your order number as the payment reference. Upload your receipt below
             after completing the transfer.
           </p>
-          <BankReceiptUpload orderId={order.id} orderNumber={order.order_number} />
+          <BankReceiptUpload orderId={order.id} alreadyUploaded={hasReceipt} />
         </div>
       )}
 

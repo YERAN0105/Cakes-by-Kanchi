@@ -137,20 +137,25 @@ export default function RegisterPage() {
         {/* Phone */}
         <div>
           <label htmlFor="phone" className="block text-sm font-body font-medium text-ink mb-1.5">
-            Phone <span className="text-ink-light font-normal">(optional)</span>
+            Phone
           </label>
-          <input
-            id="phone"
-            type="tel"
-            autoComplete="tel"
-            {...register("phone")}
-            className={cn(
-              "w-full rounded-md border px-3 py-2.5 text-sm font-body text-ink bg-card",
-              "placeholder:text-ink-light/50 focus:outline-none focus:ring-2 focus:ring-wine focus:border-transparent transition",
-              errors.phone ? "border-destructive" : "border-input"
-            )}
-            placeholder="+94 77 123 4567"
-          />
+          <div className={cn(
+            "flex rounded-md border overflow-hidden transition",
+            errors.phone ? "border-destructive" : "border-input focus-within:ring-2 focus-within:ring-wine focus-within:border-transparent"
+          )}>
+            <span className="flex items-center px-3 bg-blush-light text-ink-light text-sm font-body border-r border-input select-none shrink-0">
+              +94
+            </span>
+            <input
+              id="phone"
+              type="tel"
+              autoComplete="tel"
+              maxLength={9}
+              placeholder="771234567"
+              {...register("phone")}
+              className="flex-1 px-3 py-2.5 text-sm font-body text-ink bg-card placeholder:text-ink-light/50 focus:outline-none"
+            />
+          </div>
           {errors.phone && (
             <p className="mt-1 text-xs text-destructive font-body">{errors.phone.message}</p>
           )}

@@ -77,6 +77,7 @@ export interface Database {
           city: string;
           postal_code: string | null;
           is_default: boolean;
+          delivery_zone_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -90,6 +91,7 @@ export interface Database {
           city: string;
           postal_code?: string | null;
           is_default?: boolean;
+          delivery_zone_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["addresses"]["Insert"]>;
@@ -860,6 +862,7 @@ export interface AppliedCoupon {
   code: string;
   type: "percent" | "flat" | "free_delivery";
   value: number;
+  maxDiscount: number;
   discountAmount: number;
 }
 

@@ -35,7 +35,7 @@ Three separate clients — never mix them up:
 - `lib/supabase/server.ts` — `createClient()` async, for Server Components and Server Actions
 - `lib/supabase/admin.ts` — `createAdminClient()` uses the service role key, bypasses RLS — never import in client components
 
-Auth mutations use **Server Actions** in `lib/actions/auth.ts`. OAuth callback: `app/auth/callback/route.ts`.
+Auth mutations use **Server Actions** in `lib/actions/auth.ts`. OAuth callback: `app/auth/callback/route.ts`. Registration uses `admin.auth.admin.createUser({ email_confirm: true })` (bypasses email confirmation since Resend is not configured) then immediately signs in with `signInWithPassword`. Phone uniqueness is enforced via a partial unique index (`users_phone_unique`) — not a DB constraint — so check for duplicate before insert and roll back the auth user if taken.
 
 ### Server/client boundary for utilities
 
@@ -69,7 +69,7 @@ React Hook Form + Zod. Never add `.default()` to Zod fields — it creates a typ
 ### Client state
 
 - `stores/wishlist.ts` — Zustand with `persist` middleware (localStorage key `cakery-wishlist`). Page at `app/(storefront)/account/wishlist/page.tsx` fetches full product details from Supabase using the stored IDs. Local-only until Phase 4 wires it to the DB (merge on login).
-- `stores/cart.ts` — Zustand with `persist` middleware (localStorage key `cakery-cart`). Holds `items`, `appliedCoupon`, `isDrawerOpen`, `_hasHydrated`. `_hasHydrated` must be checked before rendering cart UI to avoid hydration mismatches. `validateAndPriceItem()` in `lib/actions/cart.ts` re-prices items server-side on every add. Cart price is re-validated again in `createOrder` — never trust client totals.
+- `stores/cart.ts` — Zustand with `persist` middleware (localStorage key `cakery-cart`). Holds `items`, `appliedCoupon`, `isDrawerOpen`, `_hasHydrated`. `_hasHydrated` must be checked before rendering cart UI to avoid hydration mismatches. `validateAndPriceItem()` in `lib/actions/cart.ts` re-prices items server-side on every add. Cart price is re-validated again in `createOrder` — never trust client totals. Every cart mutation (`addItem`, `removeItem`, `updateQuantity`) calls `refreshCoupon()` to recompute `discountAmount` live using `computeDiscount()` from `lib/cart-utils.ts` — the `maxDiscount` field on `AppliedCoupon` must stay populated for this to work.
 
 ### Key API routes
 
@@ -77,7 +77,7 @@ React Hook Form + Zod. Never add `.default()` to Zod fields — it creates a typ
 - `app/api/search/route.ts` — autocomplete, returns top 6 matches (id, slug, name, category, minPrice, imageUrl)
 - `app/api/slots/capacity/route.ts` — `GET ?date=YYYY-MM-DD`, returns `{ usage: { [slotId]: count } }` (counts active orders per slot)
 - `app/api/orders/track/route.ts` — guest order lookup by order_number + email/phone
-- `app/api/orders/upload-receipt/route.ts` — inserts `bank_transfer_receipts` row with storage path (not a public URL)
+- `app/api/orders/upload-receipt/route.ts` — accepts `FormData` with `file` + `orderId`, uploads to the private `receipts` bucket via admin client, inserts `bank_transfer_receipts` row with storage path (not a public URL). Upload is proxied through this route because the bucket is private and RLS blocks anonymous users from writing directly.
 - `app/api/payments/payhere/webhook/route.ts` — verifies MD5 signature, maps PayHere status codes to order status
 
 ### searchParams in Next.js 15
@@ -117,6 +117,9 @@ Made-to-order bakery — no physical cake inventory is held. `stock_tracked = fa
 ### Checkout / order creation notes
 
 - Order number format: `CKR-YYYYMMDD-XXXXXX`
+- `CheckoutClient` uses an `orderPlaced` ref set to `true` before `clearCart()` — this prevents the cart-empty `useEffect` from redirecting to `/cart` after a successful order. Do not remove it.
+- On mount, `CheckoutClient` auto-selects the `is_default` saved address (or first address if none flagged) via `defaultValues`, including its `delivery_zone_id`.
+- Contact section is **read-only for logged-in users** (displays name/email/phone as text with a "Update your profile" link to `/account/profile`). Guests get the full editable form. Do not make it editable for logged-in users — the order is tied to `user_id` and the profile is the right place to update those details.
 - Payment methods: `payhere` (card/bank), `bank_transfer` (manual receipt upload), `cod`
 - `free_delivery` coupon type zeros the delivery fee — handled in both `createOrder` (server) and `CheckoutClient` (client display)
 - Phone numbers: stored as `+94XXXXXXXXX`. The checkout UI shows a `+94` prefix badge; user types 9 digits. Strip/prepend on read/write.

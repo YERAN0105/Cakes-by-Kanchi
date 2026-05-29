@@ -21,24 +21,44 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
     return { error: parsed.error.errors[0].message };
   }
 
-  const supabase = await createClient();
-  const { name, email, phone, password } = parsed.data;
+  const { name, email, password } = parsed.data;
+  const phone = parsed.data.phone ? `+94${parsed.data.phone.replace(/^\+94/, "")}` : null;
+  const admin = createAdminClient();
 
-  const { data, error } = await supabase.auth.signUp({
+  // Create with email_confirm: true so the account is immediately usable.
+  // When Resend is configured, swap this for supabase.auth.signUp() + confirmation email flow.
+  const { data: adminData, error: createError } = await admin.auth.admin.createUser({
     email,
     password,
-    options: {
-      data: { name, phone: phone ?? null },
-    },
+    email_confirm: true,
+    user_metadata: { name, phone: phone ?? null },
   });
 
-  if (error) return { error: error.message };
-  if (!data.user) return { error: "Registration failed. Please try again." };
+  if (createError) {
+    if (createError.message.toLowerCase().includes("already registered")) {
+      return { error: "An account with this email already exists." };
+    }
+    return { error: createError.message };
+  }
+  if (!adminData.user) return { error: "Registration failed. Please try again." };
 
-  // Insert into users table via admin client (bypasses RLS for initial insert)
-  const admin = createAdminClient();
+  // Check phone uniqueness before inserting (only when phone is provided)
+  if (phone) {
+    const { data: existingPhone } = await admin
+      .from("users")
+      .select("id")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (existingPhone) {
+      // Roll back the auth user we just created
+      await admin.auth.admin.deleteUser(adminData.user.id);
+      return { error: "An account with this phone number already exists." };
+    }
+  }
+
+  // Insert profile row
   const { error: profileError } = await admin.from("users").insert({
-    id: data.user.id,
+    id: adminData.user.id,
     email,
     name,
     phone: phone ?? null,
@@ -46,11 +66,19 @@ export async function registerAction(formData: FormData): Promise<ActionResult> 
   });
 
   if (profileError) {
-    // If duplicate — user already exists from OAuth; not fatal
+    await admin.auth.admin.deleteUser(adminData.user.id);
+    if (profileError.message.includes("users_phone_unique")) {
+      return { error: "An account with this phone number already exists." };
+    }
     if (!profileError.message.includes("duplicate")) {
       return { error: "Failed to create profile. Please contact support." };
     }
   }
+
+  // Sign in immediately so the session is established
+  const supabase = await createClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  if (signInError) return { error: signInError.message };
 
   return { success: true };
 }
@@ -73,6 +101,9 @@ export async function loginAction(formData: FormData): Promise<ActionResult> {
   if (error) {
     if (error.message.toLowerCase().includes("invalid")) {
       return { error: "Incorrect email or password." };
+    }
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      return { error: "Your email isn't confirmed yet. Please contact us or try registering again." };
     }
     return { error: error.message };
   }

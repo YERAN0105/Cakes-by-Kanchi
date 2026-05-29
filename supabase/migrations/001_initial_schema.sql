@@ -53,8 +53,9 @@ create table addresses (
   line2        text,
   city         text not null,
   postal_code  text,
-  is_default   boolean not null default false,
-  created_at   timestamptz not null default now()
+  is_default        boolean not null default false,
+  delivery_zone_id  uuid references delivery_zones(id) on delete set null,
+  created_at        timestamptz not null default now()
 );
 create index addresses_user_id_idx on addresses(user_id);
 
@@ -200,7 +201,7 @@ create index coupons_code_idx on coupons(code);
 create table coupon_usage (
   id          uuid primary key default gen_random_uuid(),
   coupon_id   uuid not null references coupons(id) on delete cascade,
-  order_id    uuid,
+  order_id    uuid references orders(id) on delete cascade,
   user_id     uuid references users(id) on delete set null,
   used_at     timestamptz not null default now()
 );

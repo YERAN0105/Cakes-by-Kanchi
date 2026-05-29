@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,7 +16,6 @@ import {
   Banknote,
   Check,
   Loader2,
-  ChevronDown,
   MapPin,
   Calendar,
   Clock,
@@ -76,6 +75,8 @@ const checkoutSchema = z
     city: z.string().optional(),
     postalCode: z.string().optional(),
     saveAddress: z.boolean().optional(),
+    addressLabel: z.enum(["Home", "Work", "Other"]).optional(),
+    addressLabelCustom: z.string().max(20).optional(),
     deliveryZoneId: z.string().optional(),
     deliveryDate: z.string().min(1, "Please select a delivery date"),
     timeSlotId: z.string().min(1, "Please select a time slot"),
@@ -129,6 +130,9 @@ export function CheckoutClient({
   const [couponLoading, setCouponLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [slotCapacityMap, setSlotCapacityMap] = useState<Record<string, number>>({});
+  const orderPlaced = useRef(false);
+
+  const defaultAddress = savedAddresses.find((a) => a.is_default) ?? savedAddresses[0] ?? null;
 
   const {
     register,
@@ -145,14 +149,16 @@ export function CheckoutClient({
       phone: (user?.phone ?? "").replace(/^(\+94|0)/, ""),
       fulfillmentType: "delivery",
       loyaltyPoints: 0,
+      savedAddressId: defaultAddress?.id ?? undefined,
+      deliveryZoneId: defaultAddress?.delivery_zone_id ?? undefined,
     },
   });
 
   const values = watch();
 
-  // Redirect if cart is empty after hydration
+  // Redirect if cart is empty after hydration (skip when order was just placed)
   useEffect(() => {
-    if (_hasHydrated && items.length === 0) {
+    if (_hasHydrated && items.length === 0 && !orderPlaced.current) {
       router.replace("/cart");
     }
   }, [_hasHydrated, items.length, router]);
@@ -232,6 +238,11 @@ export function CheckoutClient({
       const fullPhone = `+94${data.phone}`;
       const fullRecipientPhone = data.recipientPhone ? `+94${data.recipientPhone}` : fullPhone;
 
+      const resolvedLabel =
+        data.addressLabel === "Other"
+          ? (data.addressLabelCustom?.trim() || "Other")
+          : (data.addressLabel ?? "Home");
+
       const addressPayload =
         data.fulfillmentType === "delivery" && !data.savedAddressId
           ? {
@@ -241,7 +252,7 @@ export function CheckoutClient({
               line2: data.addressLine2,
               city: data.city ?? "",
               postal_code: data.postalCode,
-              label: "Home",
+              label: resolvedLabel,
               save: data.saveAddress,
             }
           : undefined;
@@ -273,6 +284,7 @@ export function CheckoutClient({
         return;
       }
 
+      orderPlaced.current = true;
       clearCart();
       router.push(result.redirectUrl);
     } finally {
@@ -299,59 +311,84 @@ export function CheckoutClient({
 
             {/* ── 1. Contact ───────────────────────── */}
             <SectionCard title="Contact Information" icon={<BadgeCheck className="w-5 h-5" />}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="sm:col-span-2">
-                  <FieldLabel htmlFor="name">Full name</FieldLabel>
-                  <input
-                    id="name"
-                    type="text"
-                    autoComplete="name"
-                    {...register("name")}
-                    className={fieldCls(!!errors.name)}
-                  />
-                  <FieldError msg={errors.name?.message} />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="email">Email</FieldLabel>
-                  <input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    {...register("email")}
-                    className={fieldCls(!!errors.email)}
-                  />
-                  <FieldError msg={errors.email?.message} />
-                </div>
-                <div>
-                  <FieldLabel htmlFor="phone">Phone</FieldLabel>
-                  <div className={cn(
-                    "flex rounded-lg border overflow-hidden transition-colors",
-                    "focus-within:ring-1 focus-within:ring-wine bg-cream",
-                    errors.phone ? "border-destructive" : "border-border hover:border-wine/40"
-                  )}>
-                    <span className="flex items-center px-3 bg-blush-light text-ink-light text-sm font-body border-r border-border select-none shrink-0">
-                      +94
-                    </span>
-                    <input
-                      id="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      maxLength={9}
-                      placeholder="771234567"
-                      {...register("phone")}
-                      className="flex-1 px-3 py-2.5 bg-cream text-sm font-body text-ink placeholder:text-ink-light focus:outline-none"
-                    />
+              {user ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2">
+                      <p className="label-small text-ink-light mb-1">Full name</p>
+                      <p className="text-sm font-body font-medium text-ink">{user.name}</p>
+                    </div>
+                    <div>
+                      <p className="label-small text-ink-light mb-1">Email</p>
+                      <p className="text-sm font-body text-ink">{user.email}</p>
+                    </div>
+                    <div>
+                      <p className="label-small text-ink-light mb-1">Phone</p>
+                      <p className="text-sm font-body text-ink">{user.phone ?? "—"}</p>
+                    </div>
                   </div>
-                  <FieldError msg={errors.phone?.message} />
+                  <p className="text-xs text-ink-light">
+                    Wrong details?{" "}
+                    <a href="/account/profile" className="text-wine hover:underline">
+                      Update your profile
+                    </a>
+                  </p>
                 </div>
-              </div>
-              {!user && (
-                <p className="text-xs text-ink-light mt-2">
-                  Already have an account?{" "}
-                  <a href="/login?redirect=/checkout" className="text-wine hover:underline">
-                    Log in
-                  </a>
-                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <FieldLabel htmlFor="name">Full name</FieldLabel>
+                      <input
+                        id="name"
+                        type="text"
+                        autoComplete="name"
+                        {...register("name")}
+                        className={fieldCls(!!errors.name)}
+                      />
+                      <FieldError msg={errors.name?.message} />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="email">Email</FieldLabel>
+                      <input
+                        id="email"
+                        type="email"
+                        autoComplete="email"
+                        {...register("email")}
+                        className={fieldCls(!!errors.email)}
+                      />
+                      <FieldError msg={errors.email?.message} />
+                    </div>
+                    <div>
+                      <FieldLabel htmlFor="phone">Phone</FieldLabel>
+                      <div className={cn(
+                        "flex rounded-lg border overflow-hidden transition-colors",
+                        "focus-within:ring-1 focus-within:ring-wine bg-cream",
+                        errors.phone ? "border-destructive" : "border-border hover:border-wine/40"
+                      )}>
+                        <span className="flex items-center px-3 bg-blush-light text-ink-light text-sm font-body border-r border-border select-none shrink-0">
+                          +94
+                        </span>
+                        <input
+                          id="phone"
+                          type="tel"
+                          autoComplete="tel"
+                          maxLength={9}
+                          placeholder="771234567"
+                          {...register("phone")}
+                          className="flex-1 px-3 py-2.5 bg-cream text-sm font-body text-ink placeholder:text-ink-light focus:outline-none"
+                        />
+                      </div>
+                      <FieldError msg={errors.phone?.message} />
+                    </div>
+                  </div>
+                  <p className="text-xs text-ink-light mt-2">
+                    Already have an account?{" "}
+                    <a href="/login?redirect=/checkout" className="text-wine hover:underline">
+                      Log in
+                    </a>
+                  </p>
+                </>
               )}
             </SectionCard>
 
@@ -404,45 +441,14 @@ export function CheckoutClient({
                   className="overflow-hidden"
                 >
                   <SectionCard title="Delivery Details" icon={<MapPin className="w-5 h-5" />}>
-                    {/* Delivery zone */}
-                    <div>
-                      <FieldLabel htmlFor="zone">Delivery zone</FieldLabel>
-                      <Controller
-                        name="deliveryZoneId"
-                        control={control}
-                        render={({ field }) => (
-                          <div className="relative">
-                            <select
-                              id="zone"
-                              value={field.value ?? ""}
-                              onChange={(e) => field.onChange(e.target.value || undefined)}
-                              className={cn(fieldCls(!!errors.deliveryZoneId), "appearance-none pr-9")}
-                            >
-                              <option value="">Select a zone…</option>
-                              {deliveryZones.map((zone) => (
-                                <option key={zone.id} value={zone.id}>
-                                  {zone.name} — {formatCurrency(parseFloat(zone.fee))}
-                                  {zone.estimated_time ? ` (${zone.estimated_time})` : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <ChevronDown
-                              className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-light pointer-events-none"
-                              aria-hidden="true"
-                            />
-                          </div>
-                        )}
-                      />
-                      <FieldError msg={errors.deliveryZoneId?.message} />
-                    </div>
-
-                    {/* Saved addresses or new address form */}
+                    {/* Saved addresses — shown first when user has any */}
                     {user && savedAddresses.length > 0 && (
-                      <div className="mt-4">
+                      <div>
                         <p className="label-small text-ink mb-2">Deliver to</p>
                         <div className="space-y-2">
                           {savedAddresses.map((addr) => {
                             const isSelected = values.savedAddressId === addr.id;
+                            const zone = deliveryZones.find((z) => z.id === addr.delivery_zone_id);
                             return (
                               <label
                                 key={addr.id}
@@ -458,7 +464,12 @@ export function CheckoutClient({
                                   name="savedAddressId"
                                   value={addr.id}
                                   checked={isSelected}
-                                  onChange={() => setValue("savedAddressId", addr.id)}
+                                  onChange={() => {
+                                    setValue("savedAddressId", addr.id);
+                                    if (addr.delivery_zone_id) {
+                                      setValue("deliveryZoneId", addr.delivery_zone_id);
+                                    }
+                                  }}
                                   className="mt-1 accent-wine"
                                 />
                                 <div className="text-sm font-body">
@@ -470,6 +481,14 @@ export function CheckoutClient({
                                     {addr.line2 ? `, ${addr.line2}` : ""}, {addr.city}
                                     {addr.postal_code ? ` ${addr.postal_code}` : ""}
                                   </p>
+                                  {addr.phone && (
+                                    <p className="text-ink-light">{addr.phone}</p>
+                                  )}
+                                  {zone && (
+                                    <p className="text-xs text-wine mt-0.5">
+                                      {zone.name} — {formatCurrency(parseFloat(zone.fee))}
+                                    </p>
+                                  )}
                                 </div>
                               </label>
                             );
@@ -487,7 +506,10 @@ export function CheckoutClient({
                               name="savedAddressId"
                               value=""
                               checked={!values.savedAddressId}
-                              onChange={() => setValue("savedAddressId", undefined)}
+                              onChange={() => {
+                                setValue("savedAddressId", undefined);
+                                setValue("deliveryZoneId", undefined);
+                              }}
                               className="accent-wine"
                             />
                             + Add a new address
@@ -496,9 +518,36 @@ export function CheckoutClient({
                       </div>
                     )}
 
-                    {/* New address fields */}
+                    {/* New address fields — zone dropdown appears here for new addresses */}
                     {!values.savedAddressId && (
                       <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="sm:col-span-2">
+                          <FieldLabel htmlFor="zone">Delivery zone</FieldLabel>
+                          <Controller
+                            name="deliveryZoneId"
+                            control={control}
+                            render={({ field }) => (
+                              <div className="relative">
+                                <select
+                                  id="zone"
+                                  value={field.value ?? ""}
+                                  onChange={(e) => field.onChange(e.target.value || undefined)}
+                                  className={cn(fieldCls(!!errors.deliveryZoneId), "appearance-none pr-9")}
+                                >
+                                  <option value="">Select a zone…</option>
+                                  {deliveryZones.map((zone) => (
+                                    <option key={zone.id} value={zone.id}>
+                                      {zone.name} — {formatCurrency(parseFloat(zone.fee))}
+                                      {zone.estimated_time ? ` (${zone.estimated_time})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                                <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-light pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+                              </div>
+                            )}
+                          />
+                          <FieldError msg={errors.deliveryZoneId?.message} />
+                        </div>
                         <div className="sm:col-span-2">
                           <FieldLabel htmlFor="recipientName">Recipient name</FieldLabel>
                           <input
@@ -576,19 +625,52 @@ export function CheckoutClient({
                           />
                         </div>
                         {user && (
-                          <div className="sm:col-span-2 flex items-center gap-2">
-                            <input
-                              id="saveAddress"
-                              type="checkbox"
-                              {...register("saveAddress")}
-                              className="accent-wine"
-                            />
-                            <label
-                              htmlFor="saveAddress"
-                              className="text-sm font-body text-ink cursor-pointer"
-                            >
-                              Save this address to my account
-                            </label>
+                          <div className="sm:col-span-2 space-y-3">
+                            <div className="flex items-center gap-2">
+                              <input
+                                id="saveAddress"
+                                type="checkbox"
+                                {...register("saveAddress")}
+                                className="accent-wine"
+                              />
+                              <label
+                                htmlFor="saveAddress"
+                                className="text-sm font-body text-ink cursor-pointer"
+                              >
+                                Save this address to my account
+                              </label>
+                            </div>
+                            {values.saveAddress && (
+                              <div className="space-y-2 pl-5">
+                                <p className="text-xs font-body text-ink-light">Label this address</p>
+                                <div className="flex gap-2 flex-wrap">
+                                  {(["Home", "Work", "Other"] as const).map((lbl) => (
+                                    <button
+                                      key={lbl}
+                                      type="button"
+                                      onClick={() => setValue("addressLabel", lbl)}
+                                      className={cn(
+                                        "px-3 py-1 rounded-full text-xs font-body border transition-colors",
+                                        values.addressLabel === lbl || (!values.addressLabel && lbl === "Home")
+                                          ? "bg-wine text-cream border-wine"
+                                          : "bg-cream text-ink border-border hover:border-wine/50"
+                                      )}
+                                    >
+                                      {lbl}
+                                    </button>
+                                  ))}
+                                </div>
+                                {(values.addressLabel === "Other") && (
+                                  <input
+                                    type="text"
+                                    {...register("addressLabelCustom")}
+                                    placeholder="e.g. Parents' house"
+                                    maxLength={20}
+                                    className={cn(fieldCls(false), "max-w-xs")}
+                                  />
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -803,10 +885,19 @@ export function CheckoutClient({
                 {items.map((item) => (
                   <div key={item.cartItemId} className="flex gap-2 text-sm font-body">
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-ink line-clamp-1">{item.snapshot.name}</p>
-                      <p className="text-xs text-ink-light line-clamp-1">
-                        {item.customizationSummary.slice(0, 3).join(" · ")} × {item.customization.quantity}
+                      <p className="font-medium text-ink line-clamp-1">
+                        {item.snapshot.name}
+                        {item.customization.quantity > 1 && (
+                          <span className="ml-1.5 text-xs font-semibold text-wine">
+                            ×{item.customization.quantity}
+                          </span>
+                        )}
                       </p>
+                      {item.customizationSummary.length > 0 && (
+                        <p className="text-xs text-ink-light line-clamp-1">
+                          {item.customizationSummary.slice(0, 3).join(" · ")}
+                        </p>
+                      )}
                     </div>
                     <p className="font-medium text-wine shrink-0">{formatCurrency(item.lineTotal)}</p>
                   </div>

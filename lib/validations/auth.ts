@@ -6,9 +6,8 @@ export const registerSchema = z
     email: z.string().email("Please enter a valid email address"),
     phone: z
       .string()
-      .regex(/^\+?[0-9\s\-()]{7,20}$/, "Please enter a valid phone number")
-      .optional()
-      .or(z.literal("")),
+      .min(1, "Phone number is required")
+      .regex(/^\+?[0-9\s\-()]{7,20}$/, "Please enter a valid phone number"),
     password: z
       .string()
       .min(8, "Password must be at least 8 characters")

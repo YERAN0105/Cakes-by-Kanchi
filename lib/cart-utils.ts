@@ -1,5 +1,16 @@
-import type { ProductWithDetails } from "@/types/database";
+import type { ProductWithDetails, AppliedCoupon } from "@/types/database";
 import type { CustomizationValues } from "@/lib/validations/customization";
+
+export function computeDiscount(coupon: AppliedCoupon, subtotal: number): number {
+  let amount = 0;
+  if (coupon.type === "percent") {
+    amount = (subtotal * coupon.value) / 100;
+    if (amount > coupon.maxDiscount) amount = coupon.maxDiscount;
+  } else if (coupon.type === "flat") {
+    amount = Math.min(coupon.value, subtotal);
+  }
+  return Math.round(amount * 100) / 100;
+}
 
 export function calculateUnitPrice(
   product: ProductWithDetails,

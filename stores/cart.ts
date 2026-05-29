@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { CustomizationValues } from "@/lib/validations/customization";
 import type { AppliedCoupon } from "@/types/database";
+import { computeDiscount } from "@/lib/cart-utils";
 
 export type { AppliedCoupon };
 
@@ -49,6 +50,11 @@ function computeTotals(items: CartItem[]) {
   return { count, subtotal };
 }
 
+function refreshCoupon(coupon: AppliedCoupon | null, subtotal: number): AppliedCoupon | null {
+  if (!coupon) return null;
+  return { ...coupon, discountAmount: computeDiscount(coupon, subtotal) };
+}
+
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
@@ -63,12 +69,14 @@ export const useCartStore = create<CartState>()(
         const cartItemId = crypto.randomUUID();
         const newItem: CartItem = { ...item, cartItemId };
         const items = [...get().items, newItem];
-        set({ items, ...computeTotals(items) });
+        const totals = computeTotals(items);
+        set({ items, ...totals, appliedCoupon: refreshCoupon(get().appliedCoupon, totals.subtotal) });
       },
 
       removeItem: (cartItemId) => {
         const items = get().items.filter((i) => i.cartItemId !== cartItemId);
-        set({ items, ...computeTotals(items) });
+        const totals = computeTotals(items);
+        set({ items, ...totals, appliedCoupon: refreshCoupon(get().appliedCoupon, totals.subtotal) });
       },
 
       updateQuantity: (cartItemId, quantity) => {
@@ -81,7 +89,8 @@ export const useCartStore = create<CartState>()(
               }
             : i
         );
-        set({ items, ...computeTotals(items) });
+        const totals = computeTotals(items);
+        set({ items, ...totals, appliedCoupon: refreshCoupon(get().appliedCoupon, totals.subtotal) });
       },
 
       clearCart: () => set({ items: [], count: 0, subtotal: 0, appliedCoupon: null }),

@@ -119,6 +119,7 @@ export async function validateCoupon(
     code: data.code,
     type: data.type,
     value,
+    maxDiscount: parseFloat(data.max_discount ?? "99999999"),
     discountAmount,
   };
 

@@ -154,7 +154,7 @@ export async function createOrder(raw: CreateOrderPayload): Promise<CreateOrderR
 
   // 4. Re-fetch all products and recalculate prices
   const PRODUCT_DETAIL_SELECT =
-    "*, product_sizes(*), product_flavors(*), product_tier_options(*), product_dietary_options(*), product_addons(addons(*))";
+    "*, product_sizes(*), product_flavors(*), product_tier_options(*), product_dietary_options(*), product_addons(addons(*)), product_images(*)";
 
   const productIds = [...new Set(payload.cartItems.map((i) => i.productId))];
   const { data: productsRaw, error: productsError } = await admin
@@ -345,6 +345,12 @@ export async function createOrder(raw: CreateOrderPayload): Promise<CreateOrderR
       };
       // Optionally save address for logged-in users
       if (payload.address.save && user) {
+        const { count: existingCount } = await admin
+          .from("addresses")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user.id);
+        const isFirst = (existingCount ?? 0) === 0;
+
         await admin.from("addresses").insert({
           user_id: user.id,
           label: payload.address.label ?? "Home",
@@ -354,6 +360,8 @@ export async function createOrder(raw: CreateOrderPayload): Promise<CreateOrderR
           line2: payload.address.line2 ?? null,
           city: payload.address.city,
           postal_code: payload.address.postal_code ?? null,
+          is_default: isFirst,
+          delivery_zone_id: payload.deliveryZoneId ?? null,
         });
       }
     }
